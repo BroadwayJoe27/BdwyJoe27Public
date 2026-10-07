@@ -155,13 +155,13 @@ user taps the icon. The phone was paired over Wi-Fi (`localNetwork`).
 
 ## State as of 2026-09-18 evening
 
-Everything is committed on `main` in the python_work repo:
-`d0bd999` initial app, `1d17f32` tap-steps/hold-travels controls,
-`99e1911` run mode, and this session's run-persistence commit. The build on
+Everything is committed on `main`. The project now lives in
+`NetHackSokoban/` of the public BdwyJoe27Public repo
+(https://github.com/BroadwayJoe27/BdwyJoe27Public), imported 2026-10-07
+without its history. Its earlier history (the initial app, the
+tap-steps/hold-travels controls, run mode, run persistence and the app
+icon) stays in the private repo where it was first developed. The build on
 the phone includes run persistence, the 0.23 s hold and the app icon.
-Memory notes for
-Claude live in
-`~/.claude/projects/-Users-joemini24-Documents-python-work/memory/nethack-sokoban-app.md`.
 
 Confirmed by the user on the phone: Level 1A end to end, tap/pan, solved
 alert, best-score save. The user liked the tap-steps/hold-travels change.
