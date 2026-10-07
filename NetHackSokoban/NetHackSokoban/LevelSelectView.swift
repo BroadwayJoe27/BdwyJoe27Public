@@ -1,19 +1,17 @@
 import SwiftUI
 
+/// One mode's levels: its runs, then every level by stage.
 struct LevelSelectView: View {
+    let set: LevelSet
     @Environment(Progress.self) private var progress
     @State private var confirmReset = false
     @State private var confirmNewRun = false
     @State private var newRun: SokobanRun?
 
-    private var stages: [Int] {
-        Array(Set(SokobanLevels.all.map(\.stage))).sorted()
-    }
-
     var body: some View {
         List {
             Section {
-                if let saved = progress.savedRun, let resumed = SokobanRun(saved) {
+                if let saved = progress.savedRun(in: set), let resumed = SokobanRun(saved) {
                     NavigationLink(value: resumed) {
                         Label {
                             VStack(alignment: .leading, spacing: 2) {
@@ -32,21 +30,21 @@ struct LevelSelectView: View {
                         Label("Start a new run", systemImage: "figure.walk")
                     }
                 } else {
-                    NavigationLink(value: SokobanRun.random()) {
+                    NavigationLink(value: SokobanRun.random(in: set)) {
                         Label("Start a run", systemImage: "figure.walk")
                     }
                 }
-                ForEach(Array(progress.rankedRuns.prefix(5).enumerated()), id: \.element.id) { i, run in
+                ForEach(Array(progress.rankedRuns(in: set).prefix(5).enumerated()), id: \.element.id) { i, run in
                     RunRow(rank: i + 1, run: run)
                 }
             } header: {
                 Text("Sokoban run")
             } footer: {
-                Text("One random variant of each level, entry to prize, one score. Ranked by luck penalty, then resets, then moves.")
+                Text("One random variant of each of the \(set.stages.count) levels, entry to prize, one score. Ranked by luck penalty, then resets, then moves.")
             }
-            ForEach(stages, id: \.self) { stage in
-                Section(stageTitle(stage)) {
-                    ForEach(SokobanLevels.all.filter { $0.stage == stage }) { level in
+            ForEach(set.stages, id: \.self) { stage in
+                Section(set.stageTitle(stage)) {
+                    ForEach(set.levels.filter { $0.stage == stage }) { level in
                         NavigationLink(value: level) {
                             LevelRow(level: level, record: progress.records[level.id])
                         }
@@ -55,17 +53,15 @@ struct LevelSelectView: View {
             }
             Section {
                 Text("Tap to take one step (or push) toward the square you tapped. Press and hold a square to travel there. Boulders only roll orthogonally, and you can't squeeze diagonally between boulders or walls.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                if set == .expanded {
+                    Text("Iron bars (#) stop you and boulders alike, but you can slip diagonally past them. A boulder pushed into lava (}) sinks. Some levels have more pits or holes than boulders: fill only the ones in your way.")
+                    Text("Levels from UnNetHack's Sokoban by J Franklin Mentzer, Joseph L Traub, Thinking Rabbit and Steve Melenchuk, adapted for NetHack by Pasi Kallinen.")
+                }
             }
+            .font(.footnote)
+            .foregroundStyle(.secondary)
         }
-        .navigationTitle("Sokoban")
-        .navigationDestination(for: LevelDef.self) { level in
-            GameView(level: level)
-        }
-        .navigationDestination(for: SokobanRun.self) { run in
-            GameView(run: run)
-        }
+        .navigationTitle(set.title)
         .navigationDestination(item: $newRun) { run in
             GameView(run: run)
         }
@@ -76,24 +72,18 @@ struct LevelSelectView: View {
                 Image(systemName: "ellipsis.circle")
             }
         }
-        .confirmationDialog("Forget all best scores and runs?", isPresented: $confirmReset, titleVisibility: .visible) {
-            Button("Reset progress", role: .destructive) { progress.resetAll() }
+        .confirmationDialog("Forget all \(set.title) best scores and runs?", isPresented: $confirmReset, titleVisibility: .visible) {
+            Button("Reset progress", role: .destructive) { progress.resetAll(in: set) }
+        } message: {
+            Text("\(set == .classic ? LevelSet.expanded.title : LevelSet.classic.title) progress is kept.")
         }
         .confirmationDialog("Abandon the run in progress?", isPresented: $confirmNewRun, titleVisibility: .visible) {
             Button("Start a new run", role: .destructive) {
-                progress.saveRun(nil)
-                newRun = SokobanRun.random()
+                progress.saveRun(nil, in: set)
+                newRun = SokobanRun.random(in: set)
             }
         } message: {
             Text("The run you have going will be lost.")
-        }
-    }
-
-    private func stageTitle(_ stage: Int) -> String {
-        switch stage {
-        case 1: return "Level 1 · entry (pits)"
-        case 4: return "Level 4 · the prize"
-        default: return "Level \(stage)"
         }
     }
 }
@@ -109,6 +99,16 @@ private struct LevelRow: View {
                 Text("\(level.id) · \(level.boulders.count) boulders, \(level.traps.count) \(level.trapKind.rawValue)s")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if let credit = level.credit {
+                    Text("by \(credit)")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+                if !level.proven {
+                    Text("Not yet proven solvable; never dealt in a run")
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                }
             }
             Spacer()
             if let record, record.solves > 0 {

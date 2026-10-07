@@ -25,19 +25,26 @@ rules. Design decisions the user made explicitly:
 ```
 NetHackSokoban.xcodeproj/project.pbxproj   hand-written, Xcode 16 format, untested
 NetHackSokoban/
-  NetHackSokobanApp.swift   @main, NavigationStack, injects Progress
-  Levels.swift              GENERATED from tools/sokoban.des, do not hand-edit
-  GameModel.swift           Point, LevelDef, Board (rules + travel BFS), Game (taps, travel animation), SokobanRun
+  NetHackSokobanApp.swift   @main, NavigationStack rooted at HomeView, injects Progress
+  HomeView.swift            boot screen: Classic / Expanded; owns the LevelDef and SokobanRun destinations
+  Levels.swift              GENERATED (Classic) from tools/sokoban.des, do not hand-edit
+  ExpandedLevels.swift      GENERATED (Expanded) from tools/unnethack_sokoban.des, do not hand-edit
+  GameModel.swift           Point, LevelSet, LevelDef, Board (rules + travel BFS), Game (taps, travel animation), SokobanRun
   GameView.swift            Canvas renderer, tap/pan/pinch gestures, HUD, solved alert
-  LevelSelectView.swift     level list with best scores
-  Progress.swift            UserDefaults-backed best scores and run records
+  LevelSelectView.swift     one LevelSet's runs and level list with best scores
+  Progress.swift            UserDefaults-backed best scores, and run records and saved run per LevelSet
   Assets.xcassets/          AppIcon (1024x1024 PNG) + AccentColor
 tools/sokoban.des           NetHack 3.6 dat/sokoban.des, verbatim
-tools/gen_levels.py         parses the .des, validates positions, writes Levels.swift
+tools/unnethack_sokoban.des UnNetHack dat/sokoban.des, verbatim
+tools/gen_levels.py         parses sokoban.des, validates positions, writes Levels.swift
+tools/gen_expanded.py       parses unnethack_sokoban.des, keeps the 27 non-vanilla maps, writes ExpandedLevels.swift
+tools/solve_levels.py       Python port of Board.evaluate() (bars, lava too); proves levels solvable (see below)
+tools/solver/soko_solve.cpp the C++ search solve_levels.py drives; built into tools/solver/build/ on first use
+tools/solutions.json        a checked move list (hjklyubn keys) for every level, both sets
 tools/icon/make_icon.py     redraws Assets.xcassets/.../AppIcon.png (PIL, SF Mono Bold)
-tools/roundtrip/main.swift  save/restore check for Board.Snapshot and SavedRun
-tools/solve_check.py        Python port of Board.evaluate() + BFS solver (times out, see below)
-tools/solve_greedy.py       best-first variant of the solver (never run)
+tools/roundtrip/main.swift  save/restore check for Board.Snapshot and SavedRun, both sets
+tools/replay_wiki/main.swift  replays the wiki's entry-level solutions through Board
+tools/replay_solutions/main.swift  replays tools/solutions.json through Board
 README.md, NOTICE.md
 ```
 
@@ -46,6 +53,58 @@ Level naming: NetHack calls the entry level `soko4-*` and the prize level
 variants A and B. `LevelDef.stage` is the app's number; `LevelDef.id` is
 NetHack's name. All coordinates are (x, y) = (column, row), 0-based from
 the top-left of the map, exactly as in the .des file.
+
+## Classic and Expanded (added 2026-10-07 at the user's request)
+
+The app now opens on a boot screen (`HomeView`) with two buttons. Classic
+is everything that existed before, unchanged in play: NetHack 3.6's eight
+levels and four-level runs. Expanded is 27 more levels, NetHack-style by
+the user's choice (boulders, pits, holes, stairs; not standard Sokoban
+boxes-on-goals, which the user wants to look at converting later).
+
+Source: UnNetHack's `dat/sokoban.des` (NGPL like vanilla), which keeps the
+eight vanilla maps and adds 27, credited to J Franklin Mentzer, Joseph L
+Traub and Thinking Rabbit (all "heavily modified for NetHack by Pasi
+Kallinen") and Steve Melenchuk. UnNetHack's Sokoban is three levels deep:
+soko3 is the entry (pits), soko2 the middle (holes), soko1 the prize.
+Melenchuk's two soko4 maps are pit levels UnNetHack's dungeon never uses;
+they join the entry tier. So Expanded has stage 1 (14 variants, 1A-1N),
+stage 2 (9, 2A-2I) and stage 3 (4, 3A-3D), and its runs are three levels.
+Ids are `unh-` plus UnNetHack's name (e.g. `unh-soko3-7`), so they never
+collide with Classic ids. `LevelDef.credit` carries the author.
+
+What changed in the code:
+
+- `LevelSet` (GameModel.swift): `.classic` / `.expanded`, with `levels`,
+  `stages` and `stageTitle(_:)`. `LevelDef` gained `set` (default
+  `.classic`, so the generated Levels.swift did not change) and `credit`.
+  `LevelDef.withID(_:)` looks in both sets; saved boards and runs use it.
+- `SokobanRun.random(in:)`; a run's `set` is its levels' set, and a saved
+  run mixing sets is refused.
+- `LevelDef.next` (free play "next level"): Classic climbs to the same
+  variant letter as before; Expanded steps through the list (1A, 1B, ...
+  1N, 2A, ...), labelled "On to" within a stage and "Climb to" across.
+- `Progress`: per-level bests stay in one table (ids are unique); finished
+  runs and the saved run are per set. Classic keeps its old UserDefaults
+  keys (`sokoban.runs.v1`, `sokoban.savedrun.v1`), so nothing already on
+  the phone is lost; Expanded uses `sokoban.expanded.runs.v1` and
+  `sokoban.expanded.savedrun.v1`. "Reset progress" in a level list
+  resets only that set.
+- New terrain for Expanded maps: iron bars (`F` in the .des, drawn `#`
+  cyan) and lava (`L`, drawn `}` red). See the rules section.
+- `LevelDef.proven` (default true): false for a level the solver has not
+  cracked. It is still listed (with an orange note) and playable, but
+  `SokobanRun.random(in:)` never deals it. Only `unh-soko2-4` (Expanded
+  2B) is unproven: 12 boulders for exactly 12 holes, and every search
+  setting tried fills all but the last hole (the boulder it strands is
+  the one starting at (12,4), whose pocket the hero can only get behind
+  through the middle room). UnNetHack gives this level no scroll of
+  earth, so it is meant to be solvable. If the user solves it by hand, or
+  a better search does, add its move list to tools/solutions.json and
+  take `soko2-4` out of `UNPROVEN` in gen_expanded.py.
+- Left out, as Classic leaves out items and monsters: scrolls of earth,
+  random loot, the zoo, the giant mimics that pose as boulders on
+  UnNetHack's prize levels, and UnNetHack's random flipping of maps.
 
 ## Run mode (added 2026-09-18 at the user's request)
 
@@ -101,6 +160,14 @@ Mirrors NetHack's `test_move()` and `moverock()` with Sokoban restrictions:
 - Win: step on the up stairs (levels 1 to 3) or on the prize square
   (level 4). The prize is placed at random in one of the three closets and
   drawn only once the hero is adjacent to it.
+- Iron bars (Expanded only) block the hero and boulders, silently for the
+  hero, as NetHack's test_move() and moverock() do. They are not
+  IS_ROCK, so bad_rock() ignores them: you may slip diagonally between
+  bars and a wall.
+- Lava (Expanded only): the hero is refused entry (like pits). A boulder
+  pushed into it sinks and the lava stays. NetHack's boulder_hits_pool()
+  fills lava one time in ten; the app never does, so a level plays the
+  same way every time. No Expanded solution needs lava filled.
 - Pick-axe: `Board.breakBoulder(at:)` requires an adjacent boulder,
   leaves a `*` rock glyph (cosmetic, non-blocking), increments `penalties`.
 
@@ -126,14 +193,48 @@ single step via `Point.direction(from:toward:)`.
 - Installed on the user's iPhone 17 (iOS 26.6.1). Not yet played by hand;
   the on-device feel items (tap vs. pan, solved alert, best-score save) are
   still to be confirmed by the user.
-- `tools/solve_check.py` / `solve_greedy.py` remain unrun; superseded by the
-  wiki replay for the purpose of validating the rules.
 - Save/restore check DONE: `tools/roundtrip/main.swift` wanders every level
   at random, saves, restores, and plays the original and the restored board
   in lockstep for another 200 moves; all eight levels match on every field
   but the message line, and the `SavedRun` guards (mismatched snapshot,
   unknown level id) hold. A saved run is 400-800 bytes of JSON.
   Both harnesses now need `Progress.swift` on the swiftc line (`RunRecord`).
+
+## Verification status (2026-10-07, Expanded mode)
+
+Written in a cloud session with no Swift toolchain (swift.org downloads
+are blocked there), so NONE of the Swift changes have been compiled yet.
+First thing on the Mac:
+
+1. Build for the simulator or device; expect it to need small fixes.
+2. Run the three harnesses from the project root (compile lines at the top
+   of each; all three now also need `ExpandedLevels.swift`):
+   `tools/roundtrip` (now covers both sets and refuses mixed-set runs),
+   `tools/replay_wiki`, and the new `tools/replay_solutions`, which replays
+   `tools/solutions.json` through the real `Board`, once per possible
+   prize closet on prize levels. Expected last line of each: ALL OK.
+
+What was checked in the cloud session:
+
+- `tools/gen_expanded.py` asserts pass for all 27 Expanded maps (every
+  boulder, trap, stair and closet on floor, every `+` a declared door,
+  one trap kind per level, pits at stage 1 and holes after).
+- Solvability: `tools/solve_levels.py` found a solution for 26 of the 27
+  Expanded levels, each re-checked move by move through the Python port
+  of `Board.evaluate()` (bars and lava included) and stored in
+  `tools/solutions.json`. Run it with no arguments to re-check them (a
+  few seconds). The 27th, `unh-soko2-4`, is unproven; see above. Classic:
+  the search also solves soko4-1, soko4-2, soko3-1 and soko2-2, while
+  soko3-2, soko2-1, soko1-1 and soko1-2 defeat it. Those are NetHack's
+  own levels, so they are only skipped by `replay_solutions`.
+- How the search works (tools/solver/soko_solve.cpp): moves are whole
+  "boulder moves" (one boulder pushed any distance alone), greedy on the
+  number of traps still between the hero and the goal, with dead-state
+  cuts: boulders frozen against walls count as walls; a boulder that can
+  no longer reach any trap, given which side of it the hero can get to,
+  is dead; fewer live boulders than traps in the way ends the line.
+  Different levels need different settings, so the driver runs a fixed
+  portfolio and keeps per-level hints for the slow ones.
 
 ## Deploying to the phone
 
@@ -170,6 +271,10 @@ the icon (it lands on the home screen at the next install).
 
 ## Suggested next steps, in order
 
+0. (2026-10-07) Build the Expanded-mode changes on the Mac, run the three
+   harnesses, install, and have the user try the boot screen and an
+   Expanded run. Then, at the user's request for later: look at converting
+   free standard Sokoban sets (boxes onto goals) into NetHack-style levels.
 1. User plays a run on the phone. Things to watch: the "Run 2/4" header,
    "Abandon run" in the solved alert, the "Sokoban complete!" alert on
    the prize level, and the ranked list on the level screen.

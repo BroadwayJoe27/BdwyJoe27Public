@@ -5,7 +5,7 @@
 // soko4-1 (app Level 1A). Boulder labels are the wiki's letters.
 //
 // Run from the project root:
-//   swiftc -O -o /tmp/replay NetHackSokoban/GameModel.swift NetHackSokoban/Levels.swift NetHackSokoban/Progress.swift tools/replay_wiki/main.swift && /tmp/replay
+//   swiftc -O -o /tmp/replay NetHackSokoban/GameModel.swift NetHackSokoban/Levels.swift NetHackSokoban/ExpandedLevels.swift NetHackSokoban/Progress.swift tools/replay_wiki/main.swift && /tmp/replay
 // Expected last line: ALL OK
 
 import Foundation

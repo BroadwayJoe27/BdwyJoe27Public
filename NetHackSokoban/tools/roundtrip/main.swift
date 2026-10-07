@@ -4,7 +4,7 @@
 // played in lockstep with the original for another 200 moves.
 //
 // Run from the project root:
-//   swiftc -O -o /tmp/roundtrip NetHackSokoban/GameModel.swift NetHackSokoban/Levels.swift NetHackSokoban/Progress.swift tools/roundtrip/main.swift && /tmp/roundtrip
+//   swiftc -O -o /tmp/roundtrip NetHackSokoban/GameModel.swift NetHackSokoban/Levels.swift NetHackSokoban/ExpandedLevels.swift NetHackSokoban/Progress.swift tools/roundtrip/main.swift && /tmp/roundtrip
 // Expected last line: ALL OK
 
 import Foundation
@@ -27,7 +27,7 @@ func check(_ ok: Bool, _ what: String) {
 var rng = SystemRandomNumberGenerator()
 let enc = JSONEncoder(), dec = JSONDecoder()
 
-for level in SokobanLevels.all {
+for level in SokobanLevels.all + ExpandedLevels.all {
     var board = Board(level: level)
     // Wander for a while: random legal steps, plus an occasional pick-axe.
     for i in 0..<400 where !board.solved {
@@ -58,29 +58,36 @@ for level in SokobanLevels.all {
     print("\(level.id): ok (\(board.moves) moves, \(data.count) bytes saved)")
 }
 
-// A run part-way through: encode, decode, and check every field comes back.
-var run = SokobanRun.random()
-_ = run.advance()
-run.moves = 321; run.penalties = 2; run.resets = 1
-var mid = Board(level: run.current)
-for _ in 0..<50 { mid.step(dir: Point.directions.randomElement(using: &rng)!) }
-let saved = run.saved(board: mid.snapshot)
-let back = try! dec.decode(SavedRun.self, from: try! enc.encode(saved))
-guard let rerun = SokobanRun(back) else { fatalError("run would not restore") }
-check(rerun.levels.map(\.id) == run.levels.map(\.id), "run levels")
-check(rerun.index == 1 && rerun.moves == 321 && rerun.penalties == 2 && rerun.resets == 1, "run totals")
-check(rerun.resumeBoard == mid.snapshot, "run board snapshot")
-check(back.totalMoves == 321 + mid.moves, "run totalMoves")
-check(Board(snapshot: rerun.resumeBoard!)?.player == mid.player, "run board rebuilds")
-// A snapshot from the wrong level must be dropped, not trusted.
-var wrong = back
-wrong.board!.levelID = SokobanLevels.all.first { $0.id != run.current.id }!.id
-check(SokobanRun(wrong)?.resumeBoard == nil, "mismatched snapshot dropped")
-// Garbage level ids must refuse the whole run.
-var junk = back
-junk.levelIDs = ["soko9-9"] + junk.levelIDs.dropFirst()
-check(SokobanRun(junk) == nil, "unknown level id refused")
-print("run: ok (\(run.variantSummary), \(try! enc.encode(saved).count) bytes saved)")
+// A run part-way through, in each set: encode, decode, and check every field comes back.
+for set in LevelSet.allCases {
+    var run = SokobanRun.random(in: set)
+    _ = run.advance()
+    run.moves = 321; run.penalties = 2; run.resets = 1
+    var mid = Board(level: run.current)
+    for _ in 0..<50 { mid.step(dir: Point.directions.randomElement(using: &rng)!) }
+    let saved = run.saved(board: mid.snapshot)
+    let back = try! dec.decode(SavedRun.self, from: try! enc.encode(saved))
+    guard let rerun = SokobanRun(back) else { fatalError("run would not restore") }
+    check(rerun.levels.map(\.id) == run.levels.map(\.id), "run levels")
+    check(rerun.index == 1 && rerun.moves == 321 && rerun.penalties == 2 && rerun.resets == 1, "run totals")
+    check(rerun.resumeBoard == mid.snapshot, "run board snapshot")
+    check(back.totalMoves == 321 + mid.moves, "run totalMoves")
+    check(Board(snapshot: rerun.resumeBoard!)?.player == mid.player, "run board rebuilds")
+    // A snapshot from the wrong level must be dropped, not trusted.
+    var wrong = back
+    wrong.board!.levelID = set.levels.first { $0.id != run.current.id }!.id
+    check(SokobanRun(wrong)?.resumeBoard == nil, "mismatched snapshot dropped")
+    // Garbage level ids must refuse the whole run.
+    var junk = back
+    junk.levelIDs = ["soko9-9"] + junk.levelIDs.dropFirst()
+    check(SokobanRun(junk) == nil, "unknown level id refused")
+    // A run mixing the two sets must be refused.
+    var mixed = back
+    mixed.levelIDs[0] = (set == .classic ? ExpandedLevels.all : SokobanLevels.all)[0].id
+    check(SokobanRun(mixed) == nil, "mixed-set run refused")
+    check(rerun.set == set, "run keeps its set")
+    print("\(set.title) run: ok (\(run.variantSummary), \(try! enc.encode(saved).count) bytes saved)")
+}
 
 print(failures == 0 ? "ALL OK" : "\(failures) FAILURES")
 exit(failures == 0 ? 0 : 1)

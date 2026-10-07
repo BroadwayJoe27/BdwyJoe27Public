@@ -57,15 +57,15 @@ struct GameView: View {
             guard run != nil else { showSolved = true; return }
             run!.completeCurrentLevel(moves: game.board.moves, penalties: game.board.penalties)
             if run!.isLastLevel {
-                runWasBest = progress.recordRun(run!.record)
-                progress.saveRun(nil)
+                runWasBest = progress.recordRun(run!.record, in: run!.set)
+                progress.saveRun(nil, in: run!.set)
                 showRunComplete = true
             } else {
                 // Save the run as it will stand once the stairs are climbed:
                 // the alert's only other choice is to abandon, which clears it.
                 var ahead = run!
                 _ = ahead.advance()
-                progress.saveRun(ahead.saved(board: nil))
+                progress.saveRun(ahead.saved(board: nil), in: ahead.set)
                 showSolved = true
             }
         }
@@ -73,12 +73,12 @@ struct GameView: View {
             if let run, let next = run.nextLevel {
                 Button("Climb to \(next.title)") { climbInRun() }
                 Button("Abandon run", role: .cancel) {
-                    progress.saveRun(nil)
+                    progress.saveRun(nil, in: run.set)
                     dismiss()
                 }
             } else {
                 if let next = level.next {
-                    Button("Climb to \(next.title)") { load(next) }
+                    Button(next.stage > level.stage ? "Climb to \(next.title)" : "On to \(next.title)") { load(next) }
                 }
                 Button("Play again") { game.reset() }
                 Button("Levels") { dismiss() }
@@ -87,7 +87,7 @@ struct GameView: View {
             Text(solvedSummary)
         }
         .alert("Sokoban complete!", isPresented: $showRunComplete) {
-            Button("New run") { startRun(SokobanRun.random()) }
+            Button("New run") { startRun(SokobanRun.random(in: level.set)) }
             Button("Levels") { dismiss() }
         } message: {
             Text(runSummary)
@@ -192,7 +192,7 @@ struct GameView: View {
         s += run.resets == 0 ? ", no resets." : ", \(run.resets) reset\(run.resets == 1 ? "" : "s")."
         if runWasBest {
             s += "\nYour best run."
-        } else if let best = progress.bestRun {
+        } else if let best = progress.bestRun(in: run.set) {
             s += "\nBest: \(best.moves) moves"
             s += best.penalties == 0 ? "" : ", luck \u{2212}\(best.penalties)"
             s += best.resets == 0 ? "." : ", \(best.resets) resets."
@@ -224,7 +224,7 @@ struct GameView: View {
     /// solved handler has already written the run as it stands after it.
     private func persistRun() {
         guard let run, !game.board.solved else { return }
-        progress.saveRun(run.saved(board: game.board.snapshot))
+        progress.saveRun(run.saved(board: game.board.snapshot), in: run.set)
     }
 
     // MARK: Geometry and gestures
@@ -321,6 +321,8 @@ enum Palette {
     static let pit = Color(red: 0.55, green: 0.6, blue: 0.75)
     static let hole = Color(red: 0.75, green: 0.5, blue: 0.2)
     static let door = Color(red: 0.85, green: 0.6, blue: 0.2)
+    static let bars = Color(red: 0.3, green: 0.75, blue: 0.85)
+    static let lava = Color(red: 0.95, green: 0.25, blue: 0.15)
     static let stairs = Color(white: 0.95)
     static let hero = Color.white
     static let heroFill = Color(red: 0.15, green: 0.25, blue: 0.4)
@@ -395,6 +397,8 @@ struct MapCanvas: View {
         case .wall(let ch): return Appearance(glyph: ch, color: Palette.wall, fill: nil)
         case .floor: return Appearance(glyph: ".", color: Palette.floorDot, fill: fill)
         case .door: return Appearance(glyph: "+", color: Palette.door, fill: fill)
+        case .bars: return Appearance(glyph: "#", color: Palette.bars, fill: nil)
+        case .lava: return Appearance(glyph: "}", color: Palette.lava, fill: fill)
         }
     }
 }

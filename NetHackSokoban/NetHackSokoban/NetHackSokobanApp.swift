@@ -7,7 +7,7 @@ struct NetHackSokobanApp: App {
     var body: some Scene {
         WindowGroup {
             NavigationStack {
-                LevelSelectView()
+                HomeView()
             }
             .environment(progress)
             .preferredColorScheme(.dark)

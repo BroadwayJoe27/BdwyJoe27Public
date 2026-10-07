@@ -50,12 +50,39 @@ enum Terrain: Equatable {
     case wall(Character) // '-' or '|'
     case floor
     case door
+    case bars           // iron bars ('F' in the .des), Expanded levels only
+    case lava           // molten lava ('L' in the .des), Expanded levels only
 
+    /// NetHack's IS_ROCK. Iron bars and lava are not rock, so they never
+    /// count toward the no-squeezing rule, though neither can be entered.
     var isRock: Bool {
         switch self {
         case .stone, .wall: return true
-        case .floor, .door: return false
+        case .floor, .door, .bars, .lava: return false
         }
+    }
+}
+
+/// The two halves of the app, picked on the boot screen. Each has its own
+/// levels, runs and run in progress; per-level bests share one table, as
+/// level ids never collide.
+enum LevelSet: String, CaseIterable, Identifiable, Hashable {
+    /// NetHack 3.6's eight levels: four stages, two variants each.
+    case classic
+    /// UnNetHack's 27 additional levels: three stages, like its Sokoban.
+    case expanded
+
+    var id: String { rawValue }
+    var title: String { self == .classic ? "Classic" : "Expanded" }
+    var levels: [LevelDef] { self == .classic ? SokobanLevels.all : ExpandedLevels.all }
+    var stages: [Int] { Array(Set(levels.map(\.stage))).sorted() }
+    var lastStage: Int { stages.last ?? 1 }
+
+    func stageTitle(_ stage: Int) -> String {
+        let pits = levels.first { $0.stage == stage }?.trapKind == .pit
+        if stage == lastStage { return "Level \(stage) · the prize" }
+        if stage == 1 { return "Level 1 · entry (\(pits ? "pits" : "holes"))" }
+        return "Level \(stage)" + (self == .expanded ? " · \(pits ? "pits" : "holes")" : "")
     }
 }
 
@@ -71,6 +98,11 @@ struct LevelDef: Identifiable, Hashable {
     let traps: [Point]
     let doors: [Point]
     let prizeSpots: [Point] // closets that may hold the prize on the top level
+    var set: LevelSet = .classic
+    var credit: String? = nil   // the level's author, where the source names one
+    /// False for a level tools/solve_levels.py has not yet solved. It can be
+    /// played from the list but is never dealt in a run.
+    var proven = true
 
     var width: Int { rows.first?.count ?? 0 }
     var height: Int { rows.count }
@@ -79,9 +111,24 @@ struct LevelDef: Identifiable, Hashable {
     static func == (a: LevelDef, b: LevelDef) -> Bool { a.id == b.id }
     func hash(into h: inout Hasher) { h.combine(id) }
 
-    /// The level you reach by climbing the up stairs, keeping the same variant letter.
+    /// Where "next" goes after a free-play solve. Classic climbs the stairs,
+    /// keeping the variant letter. Expanded stages have different numbers of
+    /// variants, so it steps through the list instead: the next variant of
+    /// this stage, then the first of the next stage.
     var next: LevelDef? {
-        SokobanLevels.all.first { $0.stage == stage + 1 && $0.variant == variant }
+        switch set {
+        case .classic:
+            return SokobanLevels.all.first { $0.stage == stage + 1 && $0.variant == variant }
+        case .expanded:
+            let all = ExpandedLevels.all
+            guard let i = all.firstIndex(of: self), i + 1 < all.count else { return nil }
+            return all[i + 1]
+        }
+    }
+
+    /// Any level in either set, by id.
+    static func withID(_ id: String) -> LevelDef? {
+        SokobanLevels.all.first { $0.id == id } ?? ExpandedLevels.all.first { $0.id == id }
     }
 }
 
@@ -120,6 +167,8 @@ struct Board {
                 case ".": return .floor
                 case "+": return .door
                 case "-", "|": return .wall(ch)
+                case "F": return .bars
+                case "L": return .lava
                 default: return .stone
                 }
             }
@@ -156,8 +205,8 @@ struct Board {
     /// Can the hero at `u` step in direction `d`? Does not mutate.
     func evaluate(from u: Point, dir d: Point, allowPush: Bool) -> MoveCheck {
         let t = u + d
-        guard inBounds(t), !terrain(at: t).isRock else {
-            return .blocked(nil)   // NetHack is silent about walls unless mention_walls is set
+        guard inBounds(t), !terrain(at: t).isRock, terrain(at: t) != .bars else {
+            return .blocked(nil)   // NetHack is silent about walls and bars unless mention_walls is set
         }
         let diagonal = d.x != 0 && d.y != 0
         if diagonal {
@@ -178,13 +227,17 @@ struct Board {
                 return .blocked("The boulder won't roll diagonally on this floor.")
             }
             let beyond = t + d
-            if !inBounds(beyond) || terrain(at: beyond).isRock || boulders.contains(beyond) {
+            if !inBounds(beyond) || terrain(at: beyond).isRock || terrain(at: beyond) == .bars
+                || boulders.contains(beyond) {
                 return .blocked("You try to move the boulder, but in vain.")
             }
             return .push
         }
         if traps.contains(t) {
             return .blocked("There is a \(trapKind.rawValue) there; you would fall in.")
+        }
+        if terrain(at: t) == .lava {
+            return .blocked("That is molten lava; you would burn to a crisp.")
         }
         return .move
     }
@@ -209,6 +262,10 @@ struct Board {
             if traps.contains(beyond) {
                 traps.remove(beyond)
                 message = trapKind == .pit ? "The boulder fills a pit." : "The boulder plugs a hole."
+            } else if terrain(at: beyond) == .lava {
+                // NetHack fills the lava one time in ten; here it always sinks,
+                // so a level plays the same way every time.
+                message = "You push the boulder into the lava. It sinks without a trace!"
             } else {
                 boulders.insert(beyond)
                 message = (moves - lastPushMove > 2) ? "With great effort you move the boulder." : ""
@@ -327,7 +384,7 @@ struct Board {
 
     /// Rebuild a saved board on top of its level. Nil if the level is unknown.
     init?(snapshot s: Snapshot) {
-        guard let level = SokobanLevels.all.first(where: { $0.id == s.levelID }) else { return nil }
+        guard let level = LevelDef.withID(s.levelID) else { return nil }
         self.init(level: level)
         boulders = Set(s.boulders)
         traps = Set(s.traps)
@@ -429,7 +486,8 @@ final class Game {
 
 /// A full Sokoban run as NetHack deals it: one randomly chosen variant of
 /// each stage, entry to prize, with moves and penalties totalled across
-/// the levels. Saved to `Progress` as a `SavedRun` after every move, so
+/// the levels. Classic runs are four levels long; Expanded runs three, as
+/// in UnNetHack. Saved to `Progress` as a `SavedRun` after every move, so
 /// killing the app or backing out to the level list only pauses it.
 struct SokobanRun: Hashable {
     let levels: [LevelDef]        // one per stage, in play order
@@ -440,14 +498,14 @@ struct SokobanRun: Hashable {
     /// Set only when resuming: the half-played board to open the level with.
     var resumeBoard: Board.Snapshot?
 
-    static func random() -> SokobanRun {
-        let stages = Set(SokobanLevels.all.map(\.stage)).sorted()
-        let picks = stages.compactMap { stage in
-            SokobanLevels.all.filter { $0.stage == stage }.randomElement()
+    static func random(in set: LevelSet = .classic) -> SokobanRun {
+        let picks = set.stages.compactMap { stage in
+            set.levels.filter { $0.stage == stage && $0.proven }.randomElement()
         }
         return SokobanRun(levels: picks)
     }
 
+    var set: LevelSet { levels.first?.set ?? .classic }
     var current: LevelDef { levels[index] }
     var isLastLevel: Bool { index == levels.count - 1 }
     var nextLevel: LevelDef? { isLastLevel ? nil : levels[index + 1] }
@@ -498,8 +556,9 @@ extension SokobanRun {
     /// Rebuild a saved run. Nil if the level ids no longer line up, which
     /// would mean a saved run from an incompatible build.
     init?(_ s: SavedRun) {
-        let defs = s.levelIDs.compactMap { id in SokobanLevels.all.first { $0.id == id } }
-        guard defs.count == s.levelIDs.count, s.index >= 0, s.index < defs.count else { return nil }
+        let defs = s.levelIDs.compactMap(LevelDef.withID)
+        guard defs.count == s.levelIDs.count, s.index >= 0, s.index < defs.count,
+              Set(defs.map(\.set)).count == 1 else { return nil }
         let board = s.board?.levelID == defs[s.index].id ? s.board : nil
         self.init(levels: defs, index: s.index, moves: s.moves,
                   penalties: s.penalties, resets: s.resets, resumeBoard: board)
