@@ -33,7 +33,8 @@ enum SokobanLevels {
             boulders: [P(2, 2), P(2, 3), P(10, 2), P(9, 3), P(10, 4), P(8, 7), P(9, 8), P(9, 9), P(8, 10), P(10, 10)],
             traps: [P(3, 6), P(4, 6), P(5, 6), P(2, 8), P(2, 9), P(4, 10), P(5, 10), P(6, 10), P(7, 10)],
             doors: [],
-            prizeSpots: []
+            prizeSpots: [],
+            scrolls: [P(2, 11), P(3, 11)]
         ),
         LevelDef(
             id: "soko4-2",
@@ -58,7 +59,8 @@ enum SokobanLevels {
             boulders: [P(5, 2), P(6, 2), P(6, 3), P(7, 3), P(9, 5), P(10, 3), P(11, 2), P(12, 3), P(7, 8), P(8, 8), P(9, 8), P(10, 8)],
             traps: [P(1, 2), P(1, 3), P(1, 4), P(1, 5), P(1, 6), P(1, 7), P(3, 8), P(4, 8), P(5, 8), P(6, 8)],
             doors: [],
-            prizeSpots: []
+            prizeSpots: [],
+            scrolls: [P(1, 9), P(2, 9)]
         ),
         LevelDef(
             id: "soko3-1",

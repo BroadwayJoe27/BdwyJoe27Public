@@ -13,6 +13,7 @@ func describe(_ b: Board) -> String {
     "\(b.level.id) p=\(b.player) m=\(b.moves) pen=\(b.penalties) solved=\(b.solved) "
     + "seen=\(b.prizeSeen) prize=\(String(describing: b.prize)) glyph=\(b.prizeGlyph) "
     + "B=\(b.boulders.inReadingOrder) T=\(b.traps.inReadingOrder) R=\(b.rocks.inReadingOrder) "
+    + "S=\(b.scrolls.inReadingOrder) held=\(b.scrollsHeld) "
 }
 
 /// The message line is deliberately not saved: a resumed level starts with a
@@ -28,11 +29,17 @@ var rng = SystemRandomNumberGenerator()
 let enc = JSONEncoder(), dec = JSONDecoder()
 
 for level in SokobanLevels.all + ExpandedLevels.all {
-    var board = Board(level: level)
-    // Wander for a while: random legal steps, plus an occasional pick-axe.
+    // Wander for a while: random legal steps, plus an occasional pick-axe,
+    // and a scroll of earth read on levels that have them.
+    var board = Board(level: level, scrollsHeld: level.scrolls.isEmpty ? 0 : 1)
     for i in 0..<400 where !board.solved {
         if i == 150, let b = board.boulders.first(where: { $0.chebyshev(to: board.player) == 1 }) {
             board.breakBoulder(at: b)
+        }
+        if i == 250, board.scrollsHeld > 0 {
+            let before = board.penalties
+            check(board.readEarth() && board.penalties == before + 2 && board.boulders.contains(board.player),
+                  "\(level.id) reads a scroll of earth")
         }
         board.step(dir: Point.directions.randomElement(using: &rng)!)
     }
@@ -62,14 +69,14 @@ for level in SokobanLevels.all + ExpandedLevels.all {
 for set in LevelSet.allCases {
     var run = SokobanRun.random(in: set)
     _ = run.advance()
-    run.moves = 321; run.penalties = 2; run.resets = 1
-    var mid = Board(level: run.current)
+    run.moves = 321; run.penalties = 2; run.resets = 1; run.scrolls = 1
+    var mid = Board(level: run.current, scrollsHeld: 1)
     for _ in 0..<50 { mid.step(dir: Point.directions.randomElement(using: &rng)!) }
     let saved = run.saved(board: mid.snapshot)
     let back = try! dec.decode(SavedRun.self, from: try! enc.encode(saved))
     guard let rerun = SokobanRun(back) else { fatalError("run would not restore") }
     check(rerun.levels.map(\.id) == run.levels.map(\.id), "run levels")
-    check(rerun.index == 1 && rerun.moves == 321 && rerun.penalties == 2 && rerun.resets == 1, "run totals")
+    check(rerun.index == 1 && rerun.moves == 321 && rerun.penalties == 2 && rerun.resets == 1 && rerun.scrolls == 1, "run totals")
     check(rerun.resumeBoard == mid.snapshot, "run board snapshot")
     check(back.totalMoves == 321 + mid.moves, "run totalMoves")
     check(Board(snapshot: rerun.resumeBoard!)?.player == mid.player, "run board rebuilds")
@@ -87,6 +94,34 @@ for set in LevelSet.allCases {
     check(SokobanRun(mixed) == nil, "mixed-set run refused")
     check(rerun.set == set, "run keeps its set")
     print("\(set.title) run: ok (\(run.variantSummary), \(try! enc.encode(saved).count) bytes saved)")
+}
+
+// A save from before scrolls of earth (no scroll keys) must still load.
+do {
+    let level = SokobanLevels.all[0]
+    var b = Board(level: level)
+    b.step(dir: Point(1, 0))
+    var obj = try! JSONSerialization.jsonObject(with: try! enc.encode(b.snapshot)) as! [String: Any]
+    obj["scrolls"] = nil; obj["scrollsHeld"] = nil
+    let old = try! dec.decode(Board.Snapshot.self, from: try! JSONSerialization.data(withJSONObject: obj))
+    let r = Board(snapshot: old)
+    check(r?.scrolls == Set(level.scrolls) && r?.scrollsHeld == 0, "pre-scroll board save loads")
+    var run = try! JSONSerialization.jsonObject(with: try! enc.encode(SokobanRun.random().saved(board: nil))) as! [String: Any]
+    run["scrolls"] = nil
+    let oldRun = try! dec.decode(SavedRun.self, from: try! JSONSerialization.data(withJSONObject: run))
+    check(SokobanRun(oldRun)?.scrolls == 0, "pre-scroll run save loads")
+}
+
+// Picking up: walk onto each level's scrolls by travel, with the boulders
+// and traps cleared away (the scrolls start behind them).
+for level in SokobanLevels.all + ExpandedLevels.all where !level.scrolls.isEmpty {
+    var b = Board(level: level)
+    b.boulders.removeAll(); b.traps.removeAll()
+    for s in level.scrolls {
+        for q in b.travelPath(to: s) { b.step(dir: q - b.player) }
+    }
+    check(b.scrollsHeld == level.scrolls.count && b.scrolls.isEmpty,
+          "\(level.id) picks up its scrolls (held \(b.scrollsHeld))")
 }
 
 print(failures == 0 ? "ALL OK" : "\(failures) FAILURES")

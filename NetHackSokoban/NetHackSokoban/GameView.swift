@@ -17,6 +17,7 @@ struct GameView: View {
     @State private var showRunComplete = false
     @State private var runWasBest = false
     @State private var confirmReset = false
+    @State private var confirmEarth = false
     @State private var run: SokobanRun?
 
     /// Free play of one level.
@@ -29,7 +30,7 @@ struct GameView: View {
     /// `run.resumeBoard` reopens a level that was left half-played.
     init(run: SokobanRun) {
         _level = State(initialValue: run.current)
-        _game = State(initialValue: Game(level: run.current,
+        _game = State(initialValue: Game(level: run.current, scrollsCarriedIn: run.scrolls,
                                          board: run.resumeBoard.flatMap(Board.init(snapshot:))))
         _run = State(initialValue: run)
     }
@@ -55,7 +56,8 @@ struct GameView: View {
             guard solved else { return }
             progress.record(levelID: level.id, moves: game.board.moves, penalties: game.board.penalties)
             guard run != nil else { showSolved = true; return }
-            run!.completeCurrentLevel(moves: game.board.moves, penalties: game.board.penalties)
+            run!.completeCurrentLevel(moves: game.board.moves, penalties: game.board.penalties,
+                                      scrollsHeld: game.board.scrollsHeld)
             if run!.isLastLevel {
                 runWasBest = progress.recordRun(run!.record, in: run!.set)
                 progress.saveRun(nil, in: run!.set)
@@ -100,6 +102,11 @@ struct GameView: View {
             }
         } message: {
             if run != nil { Text("Resets count against a run's score.") }
+        }
+        .confirmationDialog("Read a scroll of earth?", isPresented: $confirmEarth, titleVisibility: .visible) {
+            Button("Read it (Luck \u{2212}2)", role: .destructive) { game.readEarth() }
+        } message: {
+            Text("Boulders fall on every open square around you, and one on you. In Sokoban that costs 2 Luck.")
         }
     }
 
@@ -154,6 +161,14 @@ struct GameView: View {
             }
             .tint(game.pickaxeMode ? .orange : nil)
             .buttonStyle(.borderedProminent)
+            if game.board.scrollsHeld > 0 {
+                Button {
+                    game.cancelTravel()
+                    confirmEarth = true
+                } label: {
+                    Label("\u{00D7}\(game.board.scrollsHeld)", systemImage: "scroll")
+                }
+            }
             Button {
                 withAnimation(.easeOut(duration: 0.2)) {
                     zoom = 1; pan = .zero
@@ -202,7 +217,7 @@ struct GameView: View {
 
     private func load(_ next: LevelDef) {
         level = next
-        game = Game(level: next)
+        game = Game(level: next, scrollsCarriedIn: run?.scrolls ?? 0)
         zoom = 1
         pan = .zero
     }
@@ -318,6 +333,7 @@ enum Palette {
     static let wall = Color(white: 0.7)
     static let boulder = Color(white: 0.95)
     static let rock = Color(white: 0.5)
+    static let scroll = Color(red: 0.95, green: 0.85, blue: 0.55)
     static let pit = Color(red: 0.55, green: 0.6, blue: 0.75)
     static let hole = Color(red: 0.75, green: 0.5, blue: 0.2)
     static let door = Color(red: 0.85, green: 0.6, blue: 0.2)
@@ -388,6 +404,9 @@ struct MapCanvas: View {
         }
         if board.level.stage > 1, p == board.level.start {   // arrived by the down stairs
             return Appearance(glyph: ">", color: Palette.stairs, fill: fill)
+        }
+        if board.scrolls.contains(p) {
+            return Appearance(glyph: "?", color: Palette.scroll, fill: fill)
         }
         if board.rocks.contains(p) {
             return Appearance(glyph: "*", color: Palette.rock, fill: fill)

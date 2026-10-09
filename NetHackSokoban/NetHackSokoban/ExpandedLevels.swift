@@ -35,6 +35,7 @@ enum ExpandedLevels {
             traps: [P(15, 6), P(16, 6), P(17, 6), P(18, 6), P(19, 6), P(20, 6), P(21, 6), P(22, 6), P(23, 6)],
             doors: [],
             prizeSpots: [],
+            scrolls: [P(16, 3), P(16, 9)],
             set: .expanded,
             credit: "J Franklin Mentzer"
         ),
@@ -67,6 +68,7 @@ enum ExpandedLevels {
             traps: [P(1, 3), P(1, 4), P(1, 5), P(1, 6), P(1, 7), P(1, 8), P(1, 9), P(1, 10), P(3, 12), P(4, 12), P(5, 12)],
             doors: [P(2, 2)],
             prizeSpots: [],
+            scrolls: [P(1, 13), P(2, 13)],
             set: .expanded,
             credit: "Joseph L Traub"
         ),
@@ -99,6 +101,7 @@ enum ExpandedLevels {
             traps: [P(3, 3), P(4, 3), P(5, 3), P(6, 3), P(7, 3), P(8, 3), P(9, 3), P(10, 3), P(11, 3), P(12, 3), P(13, 3)],
             doors: [P(14, 4)],
             prizeSpots: [],
+            scrolls: [P(1, 1), P(2, 1)],
             set: .expanded,
             credit: "Thinking Rabbit"
         ),
@@ -128,6 +131,7 @@ enum ExpandedLevels {
             traps: [P(6, 7), P(7, 7), P(8, 7), P(9, 7), P(10, 7), P(6, 9), P(7, 9), P(8, 9), P(9, 9), P(10, 9)],
             doors: [],
             prizeSpots: [],
+            scrolls: [P(14, 1), P(15, 1)],
             set: .expanded,
             credit: "Joseph L Traub"
         ),
@@ -160,6 +164,7 @@ enum ExpandedLevels {
             traps: [P(3, 13), P(4, 13), P(5, 13), P(6, 13), P(7, 13), P(8, 13), P(9, 13), P(10, 13), P(11, 13), P(12, 13), P(16, 13), P(17, 13), P(18, 13), P(19, 13), P(20, 13), P(21, 13), P(22, 13), P(23, 13), P(24, 13), P(25, 13), P(3, 14), P(4, 14), P(5, 14), P(6, 14), P(7, 14), P(8, 14), P(9, 14), P(10, 14), P(18, 14), P(19, 14), P(20, 14), P(21, 14), P(22, 14), P(23, 14), P(24, 14), P(25, 14)],
             doors: [P(26, 12)],
             prizeSpots: [],
+            scrolls: [P(13, 13), P(15, 13)],
             set: .expanded,
             credit: "J Franklin Mentzer"
         ),
@@ -187,6 +192,7 @@ enum ExpandedLevels {
             traps: [P(2, 6), P(2, 7), P(4, 9), P(5, 9), P(6, 9), P(7, 9), P(8, 9)],
             doors: [],
             prizeSpots: [],
+            scrolls: [P(14, 6), P(14, 7)],
             set: .expanded,
             credit: "Thinking Rabbit"
         ),
@@ -215,6 +221,7 @@ enum ExpandedLevels {
             traps: [P(2, 6), P(2, 7), P(4, 9), P(5, 9), P(6, 9), P(7, 9), P(8, 9)],
             doors: [],
             prizeSpots: [],
+            scrolls: [P(1, 8), P(1, 9)],
             set: .expanded,
             credit: "Joseph L Traub"
         ),
@@ -244,6 +251,7 @@ enum ExpandedLevels {
             traps: [P(19, 2), P(19, 3), P(19, 4), P(19, 5), P(19, 6), P(19, 7), P(12, 8), P(13, 8), P(14, 8), P(15, 8), P(16, 8), P(17, 8)],
             doors: [P(18, 1)],
             prizeSpots: [],
+            scrolls: [P(18, 9), P(19, 9)],
             set: .expanded,
             credit: "Joseph L Traub"
         ),
@@ -273,6 +281,7 @@ enum ExpandedLevels {
             traps: [P(3, 1), P(4, 1), P(2, 3), P(2, 4), P(4, 5), P(5, 5), P(6, 5), P(7, 5), P(8, 5), P(9, 5)],
             doors: [],
             prizeSpots: [],
+            scrolls: [P(2, 6), P(3, 6)],
             set: .expanded,
             credit: "Thinking Rabbit"
         ),
@@ -302,6 +311,7 @@ enum ExpandedLevels {
             traps: [P(5, 5), P(6, 5), P(7, 5), P(2, 6), P(2, 7), P(2, 8), P(5, 8), P(2, 9), P(3, 11), P(4, 11), P(5, 11), P(6, 11), P(7, 11), P(8, 11)],
             doors: [P(7, 8)],
             prizeSpots: [],
+            scrolls: [P(2, 4), P(3, 4)],
             set: .expanded,
             credit: "Thinking Rabbit"
         ),
@@ -330,6 +340,7 @@ enum ExpandedLevels {
             traps: [P(16, 1), P(17, 1), P(18, 1), P(19, 3), P(19, 4), P(19, 5), P(19, 6), P(19, 7), P(19, 8), P(15, 9), P(16, 9), P(17, 9)],
             doors: [P(15, 5)],
             prizeSpots: [],
+            scrolls: [P(18, 10), P(19, 10)],
             set: .expanded,
             credit: "Joseph L Traub"
         ),
@@ -362,6 +373,7 @@ enum ExpandedLevels {
             traps: [P(8, 5), P(11, 5), P(8, 6), P(9, 6), P(10, 6), P(11, 6), P(8, 7), P(9, 7), P(10, 7), P(11, 7), P(9, 8), P(10, 8), P(9, 9), P(10, 9), P(9, 10), P(10, 10), P(9, 11), P(10, 11)],
             doors: [],
             prizeSpots: [],
+            scrolls: [P(9, 12), P(10, 12)],
             set: .expanded,
             credit: "Joseph L Traub"
         ),
@@ -389,6 +401,7 @@ enum ExpandedLevels {
             traps: [P(5, 3), P(4, 3), P(3, 3), P(1, 4), P(1, 5), P(1, 6), P(1, 7), P(1, 8)],
             doors: [],
             prizeSpots: [],
+            scrolls: [P(1, 2), P(2, 2)],
             set: .expanded,
             credit: "Steve Melenchuk"
         ),
@@ -418,6 +431,7 @@ enum ExpandedLevels {
             traps: [P(5, 9), P(4, 9), P(3, 9), P(1, 8), P(1, 7), P(1, 6), P(1, 5), P(1, 4), P(1, 3), P(1, 2)],
             doors: [],
             prizeSpots: [],
+            scrolls: [P(1, 10), P(2, 10)],
             set: .expanded,
             credit: "Steve Melenchuk"
         ),

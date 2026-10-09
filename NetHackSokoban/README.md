@@ -42,6 +42,13 @@ the project. Set the deployment target to iOS 17.
 - **Reset** starts the level over (with a confirmation).
 - **Pick-axe** then tap an adjacent boulder to break it. Each use costs
   one point of Luck, shown in the header and recorded with your score.
+- **Scrolls of earth** (`?`) lie on every entry level, two each, where
+  NetHack and UnNetHack put them. Walk over one to pick it up. The scroll
+  button (shown once you carry one) reads it: a boulder drops on every
+  open square around you and one on you, filling any pit or hole it
+  lands in. Each read costs **two** points of Luck (NetHack charges one;
+  this is a house rule). In a run, unread scrolls carry up to the next
+  level.
 - Reaching the up staircase solves levels 1 to 3. On level 4 the prize
   is in one of the three closets next to the treasure zoo; step onto it.
 
@@ -55,16 +62,15 @@ The rules that matter are the NetHack Sokoban ones:
 - Walking into an unfilled pit or hole is refused, since in the real
   game that either traps you or drops you down a level.
 
-Monsters, items, and the zoo are left out; doors count as open.
+Monsters, other items, and the zoo are left out; doors count as open.
 
 Some Expanded levels add two more terrains. Iron bars (`#`) stop you and
 boulders alike, but unlike walls they don't stop you slipping diagonally
 past them. Lava (`}`) can't be walked into; a boulder pushed into it sinks
 (NetHack fills the lava one time in ten, the app never does). A few
 Expanded levels have more pits or holes than boulders: fill only the
-ones between you and the stairs. Scrolls of earth are left out, as all
-other items are. 26 of the 27 Expanded levels have been proven solvable
-without them (see below). The last, Level 2B, is marked "not yet proven
+ones between you and the stairs. 26 of the 27 Expanded levels have been
+proven solvable without reading a scroll of earth (see below). The last, Level 2B, is marked "not yet proven
 solvable" in the list and is never dealt in a run, but can still be
 played on its own.
 

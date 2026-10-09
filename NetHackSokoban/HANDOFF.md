@@ -102,7 +102,7 @@ What changed in the code:
   earth, so it is meant to be solvable. If the user solves it by hand, or
   a better search does, add its move list to tools/solutions.json and
   take `soko2-4` out of `UNPROVEN` in gen_expanded.py.
-- Left out, as Classic leaves out items and monsters: scrolls of earth,
+- Left out, as Classic leaves out monsters and loot:
   random loot, the zoo, the giant mimics that pose as boulders on
   UnNetHack's prize levels, and UnNetHack's random flipping of maps.
 
@@ -170,6 +170,20 @@ Mirrors NetHack's `test_move()` and `moverock()` with Sokoban restrictions:
   same way every time. No Expanded solution needs lava filled.
 - Pick-axe: `Board.breakBoulder(at:)` requires an adjacent boulder,
   leaves a `*` rock glyph (cosmetic, non-blocking), increments `penalties`.
+- Scrolls of earth (added 2026-10-09 at the user's request): placed where
+  the .des files put them (`LevelDef.scrolls`, both generators; every
+  entry level has two; UnNetHack's second one is a 50% roll there, the
+  app always places it). Autopickup on stepping onto the square
+  (`Board.afterMove`). `Board.readEarth()` is the uncursed scroll: a
+  boulder on each of the 8 neighbours that is not rock or bars (a pit or
+  hole there is filled instead, lava swallows it), plus one under the
+  hero. Costs **2** Luck, the user's house rule (NetHack charges 1). A
+  second boulder onto an existing one is not stacked. Unread scrolls ride
+  along a run in `SokobanRun.scrolls` / `SavedRun.scrolls`;
+  `Game.scrollsCarriedIn` restores them on a reset. `Board.Snapshot`
+  gained optional `scrolls` / `scrollsHeld`, so saves from older builds
+  still load (roundtrip checks this). UI: a scroll button with the count,
+  behind a confirmation; floor glyph `?` in `Palette.scroll`.
 
 Travel (`Board.travelPath(to:)`): 8-direction BFS using the same legality
 check with pushing disabled. If the target is unreachable it heads for the

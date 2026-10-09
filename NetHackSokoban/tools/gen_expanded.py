@@ -13,8 +13,10 @@ uses; they join the entry tier here. Expanded runs are therefore three
 levels long.
 
 Coordinates are (x, y) = (column, row), 0-based from the top-left of the
-MAP block, as in gen_levels.py. Scrolls of earth, random loot, the zoo and
-the giant mimics are left out, as Classic leaves out items and monsters.
+MAP block, as in gen_levels.py. Scrolls of earth are kept, as in Classic;
+UnNetHack's second scroll on a level is a 50% chance, which the app always
+places, so a level plays the same way every time. Random loot, the zoo and
+the giant mimics are left out, as Classic leaves out monsters and loot.
 """
 import re, sys, pathlib
 
@@ -42,7 +44,7 @@ in_map = False
 for line in src:
     m = re.match(r'LEVEL:"([^"]+)"', line)
     if m:
-        cur = dict(name=m[1], rows=[], boulders=[], traps=[], doors=[],
+        cur = dict(name=m[1], rows=[], boulders=[], traps=[], doors=[], scrolls=[],
                    trapKind=None, start=None, exit=None, places=[], credit=None)
         levels.append(cur)
         continue
@@ -70,6 +72,8 @@ for line in src:
         cur["doors"] += pts(line); continue
     if re.match(r'OBJECT:\(\'`\',"boulder"\)', line):
         cur["boulders"] += pts(line); continue
+    if re.match(r'(\[50%\]:\s*)?OBJECT:\(\'\?\',"earth"\)', line):
+        cur["scrolls"] += pts(line); continue
     m = re.match(r'TRAP:"(pit|hole)"', line)
     if m:
         assert cur["trapKind"] in (None, m[1]), cur["name"]
@@ -94,7 +98,7 @@ for lv in levels:
     assert set("".join(lv["rows"])) <= set(" -|.+FL"), (lv["name"], set("".join(lv["rows"])))
     assert lv["start"] and lv["trapKind"] and lv["credit"], lv["name"]
     assert (lv["exit"] is None) == bool(lv["places"]), lv["name"]
-    for p in lv["boulders"] + lv["traps"] + lv["places"] + [lv["start"]] + ([lv["exit"]] if lv["exit"] else []):
+    for p in lv["boulders"] + lv["traps"] + lv["places"] + lv["scrolls"] + [lv["start"]] + ([lv["exit"]] if lv["exit"] else []):
         assert cell(lv, p) == ".", (lv["name"], p, cell(lv, p))
     for p in lv["doors"]:
         assert cell(lv, p) == "+", (lv["name"], p, cell(lv, p))
@@ -105,6 +109,7 @@ for lv in levels:
     assert len(set(lv["boulders"])) == len(lv["boulders"]), lv["name"]
     assert len(set(lv["traps"])) == len(lv["traps"]), lv["name"]
     assert not set(lv["boulders"]) & set(lv["traps"]), lv["name"]
+    assert not set(lv["scrolls"]) & set(lv["boulders"]), lv["name"]
 
 # soko3/soko4 (pits) -> stage 1, soko2 (holes) -> 2, soko1 (prize) -> 3.
 def stage(lv):
@@ -124,7 +129,7 @@ for lv in levels:
     expect = "hole" if stage(lv) > 1 else "pit"
     assert lv["trapKind"] == expect, lv["name"]
     print(f'{lv["id"]:13} {stage(lv)}{lv["variant"]} {len(lv["rows"][0])}x{len(lv["rows"])} '
-          f'boulders={len(lv["boulders"])} {lv["trapKind"]}s={len(lv["traps"])} by {lv["credit"]}'
+          f'boulders={len(lv["boulders"])} {lv["trapKind"]}s={len(lv["traps"])} scrolls={len(lv["scrolls"])} by {lv["credit"]}'
           + ("" if lv["proven"] else " (unproven)"),
           file=sys.stderr)
 
@@ -159,6 +164,8 @@ for lv in levels:
     out.append(f'            traps: {ptl(lv["traps"])},')
     out.append(f'            doors: {ptl(lv["doors"])},')
     out.append(f'            prizeSpots: {ptl(lv["places"])},')
+    if lv["scrolls"]:
+        out.append(f'            scrolls: {ptl(lv["scrolls"])},')
     out.append(f'            set: .expanded,')
     out.append(f'            credit: "{lv["credit"]}"' + ("" if lv["proven"] else ","))
     if not lv["proven"]:

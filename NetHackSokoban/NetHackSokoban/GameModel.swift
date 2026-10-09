@@ -98,6 +98,7 @@ struct LevelDef: Identifiable, Hashable {
     let traps: [Point]
     let doors: [Point]
     let prizeSpots: [Point] // closets that may hold the prize on the top level
+    var scrolls: [Point] = [] // scrolls of earth lying on the floor (entry levels)
     var set: LevelSet = .classic
     var credit: String? = nil   // the level's author, where the source names one
     /// False for a level tools/solve_levels.py has not yet solved. It can be
@@ -145,19 +146,22 @@ struct Board {
     var boulders: Set<Point>
     var traps: Set<Point>
     var rocks: Set<Point> = []             // left behind by a broken boulder, cosmetic
+    var scrolls: Set<Point>                // scrolls of earth still on the floor
+    var scrollsHeld: Int                   // scrolls of earth in the hero's pack
     var player: Point
     private(set) var prize: Point?
     private(set) var prizeGlyph: Character // '(' bag of holding or '"' amulet of reflection
     var prizeSeen = false
     var moves = 0
-    var penalties = 0                       // luck penalties incurred (pick-axe use)
+    var penalties = 0                       // luck penalties incurred (pick-axe, scroll of earth)
     var solved = false
     var message = ""
     /// Bumped by every change worth saving, so a view can persist on change.
     private(set) var revision = 0
     private var lastPushMove = -10
 
-    init(level: LevelDef) {
+    /// `scrollsHeld` is what the hero carries up from the level below in a run.
+    init(level: LevelDef, scrollsHeld: Int = 0) {
         self.level = level
         width = level.width
         height = level.height
@@ -175,6 +179,8 @@ struct Board {
         }
         boulders = Set(level.boulders)
         traps = Set(level.traps)
+        scrolls = Set(level.scrolls)
+        self.scrollsHeld = scrollsHeld
         player = level.start
         prize = level.prizeSpots.randomElement()
         prizeGlyph = Bool.random() ? "(" : "\""
@@ -280,6 +286,12 @@ struct Board {
     }
 
     private mutating func afterMove() {
+        if scrolls.remove(player) != nil {   // autopickup
+            scrollsHeld += 1
+            message = scrollsHeld == 1
+                ? "You pick up a scroll of earth."
+                : "You pick up a scroll of earth (\(scrollsHeld) carried)."
+        }
         if let prize, player.chebyshev(to: prize) <= 1 {
             prizeSeen = true
         }
@@ -304,6 +316,40 @@ struct Board {
         penalties += 1
         revision += 1
         message = "You hit the boulder with all your might. The boulder falls apart. (Luck \u{2212}1)"
+        return true
+    }
+
+    /// Read a scroll of earth, uncursed, as NetHack's seffects() does: a
+    /// boulder drops on every open square around the hero and one on the
+    /// hero's own head, which then sits under the hero. A boulder landing in
+    /// a pit or hole fills it and one landing in lava sinks, as when pushed.
+    /// NetHack charges one point of Luck for this in Sokoban; the app
+    /// charges two, by the user's choice. Where a boulder already stands,
+    /// NetHack would stack a second one; the app leaves it at one.
+    @discardableResult
+    mutating func readEarth() -> Bool {
+        guard !solved, scrollsHeld > 0 else { return false }
+        scrollsHeld -= 1
+        var filled = 0
+        for d in Point.directions {
+            let q = player + d
+            let t = terrain(at: q)
+            guard inBounds(q), !t.isRock, t != .bars else { continue }
+            if traps.remove(q) != nil {
+                filled += 1
+            } else if t != .lava {
+                boulders.insert(q)
+            }
+        }
+        boulders.insert(player)
+        penalties += 2
+        revision += 1
+        var m = "The ceiling rumbles around you! You are hit by a boulder!"
+        if filled > 0 {
+            let what = trapKind == .pit ? "pit" : "hole"
+            m += " \(filled == 1 ? "A \(what) is" : "\(filled) \(what)s are") filled."
+        }
+        message = m + " (Luck \u{2212}2)"
         return true
     }
 
@@ -366,6 +412,10 @@ struct Board {
         var moves: Int
         var penalties: Int
         var lastPushMove: Int
+        // Added with scrolls of earth; nil in a save from an earlier build,
+        // which then gets the level's scrolls and an empty pack.
+        var scrolls: [Point]?
+        var scrollsHeld: Int?
     }
 
     var snapshot: Snapshot {
@@ -379,7 +429,9 @@ struct Board {
                  prizeSeen: prizeSeen,
                  moves: moves,
                  penalties: penalties,
-                 lastPushMove: lastPushMove)
+                 lastPushMove: lastPushMove,
+                 scrolls: scrolls.inReadingOrder,
+                 scrollsHeld: scrollsHeld)
     }
 
     /// Rebuild a saved board on top of its level. Nil if the level is unknown.
@@ -396,6 +448,8 @@ struct Board {
         moves = s.moves
         penalties = s.penalties
         lastPushMove = s.lastPushMove
+        if let ss = s.scrolls { scrolls = Set(ss) }
+        scrollsHeld = s.scrollsHeld ?? 0
     }
 }
 
@@ -410,6 +464,8 @@ extension Set where Element == Point {
 @MainActor
 final class Game {
     let level: LevelDef
+    /// Scrolls of earth carried in from the level below; a reset restores them.
+    let scrollsCarriedIn: Int
     private(set) var board: Board
     var pickaxeMode = false
     private var travelTask: Task<Void, Never>?
@@ -418,9 +474,10 @@ final class Game {
     static let travelStepDelay: Duration = .milliseconds(45)
 
     /// `board` resumes a saved level; nil starts it fresh.
-    init(level: LevelDef, board: Board? = nil) {
+    init(level: LevelDef, scrollsCarriedIn: Int = 0, board: Board? = nil) {
         self.level = level
-        self.board = board ?? Board(level: level)
+        self.scrollsCarriedIn = scrollsCarriedIn
+        self.board = board ?? Board(level: level, scrollsHeld: scrollsCarriedIn)
     }
 
     var isTravelling: Bool { travelTask != nil }
@@ -428,12 +485,18 @@ final class Game {
     func reset() {
         cancelTravel()
         pickaxeMode = false
-        board = Board(level: level)
+        board = Board(level: level, scrollsHeld: scrollsCarriedIn)
     }
 
     func cancelTravel() {
         travelTask?.cancel()
         travelTask = nil
+    }
+
+    func readEarth() {
+        cancelTravel()
+        pickaxeMode = false
+        board.readEarth()
     }
 
     func togglePickaxe() {
@@ -495,6 +558,8 @@ struct SokobanRun: Hashable {
     var moves = 0                 // totals over completed levels only
     var penalties = 0
     var resets = 0
+    /// Scrolls of earth the hero brought onto the current level.
+    var scrolls = 0
     /// Set only when resuming: the half-played board to open the level with.
     var resumeBoard: Board.Snapshot?
 
@@ -511,9 +576,10 @@ struct SokobanRun: Hashable {
     var nextLevel: LevelDef? { isLastLevel ? nil : levels[index + 1] }
     var variantSummary: String { levels.map { "\($0.stage)\($0.variant)" }.joined(separator: " ") }
 
-    mutating func completeCurrentLevel(moves m: Int, penalties p: Int) {
+    mutating func completeCurrentLevel(moves m: Int, penalties p: Int, scrollsHeld: Int) {
         moves += m
         penalties += p
+        scrolls = scrollsHeld
     }
 
     /// Step to the next level. Returns it, or nil if the run is over.
@@ -539,6 +605,7 @@ struct SavedRun: Codable {
     var moves: Int
     var penalties: Int
     var resets: Int
+    var scrolls: Int?            // carried onto the current level; nil in older saves
     var board: Board.Snapshot?   // nil: start the current level fresh
     var date: Date
 
@@ -550,7 +617,7 @@ extension SokobanRun {
     /// This run's state, with `board` as the level in progress.
     func saved(board: Board.Snapshot?) -> SavedRun {
         SavedRun(levelIDs: levels.map(\.id), index: index, moves: moves,
-                 penalties: penalties, resets: resets, board: board, date: .now)
+                 penalties: penalties, resets: resets, scrolls: scrolls, board: board, date: .now)
     }
 
     /// Rebuild a saved run. Nil if the level ids no longer line up, which
@@ -561,6 +628,6 @@ extension SokobanRun {
               Set(defs.map(\.set)).count == 1 else { return nil }
         let board = s.board?.levelID == defs[s.index].id ? s.board : nil
         self.init(levels: defs, index: s.index, moves: s.moves,
-                  penalties: s.penalties, resets: s.resets, resumeBoard: board)
+                  penalties: s.penalties, resets: s.resets, scrolls: s.scrolls ?? 0, resumeBoard: board)
     }
 }

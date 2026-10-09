@@ -15,7 +15,7 @@ in_map = False
 for line in src:
     if line.startswith("MAZE:"):
         name = re.match(r'MAZE:"([^"]+)"', line).group(1)
-        cur = dict(id=name, rows=[], boulders=[], traps=[], doors=[],
+        cur = dict(id=name, rows=[], boulders=[], traps=[], doors=[], scrolls=[],
                    trapKind=None, start=None, exit=None, places=[])
         levels.append(cur)
         continue
@@ -42,6 +42,9 @@ for line in src:
     m = re.match(r'OBJECT:\(\'`\',"boulder"\),\((\d+),(\d+)\)', line)
     if m:
         cur["boulders"].append((int(m[1]), int(m[2]))); continue
+    m = re.match(r'OBJECT:\(\'\?\',"earth"\),\((\d+),(\d+)\)', line)
+    if m:
+        cur["scrolls"].append((int(m[1]), int(m[2]))); continue
     m = re.match(r'TRAP:"(pit|hole)",\((\d+),(\d+)\)', line)
     if m:
         cur["trapKind"] = m[1]
@@ -60,7 +63,7 @@ def cell(lv, p):
 for lv in levels:
     w = max(len(r) for r in lv["rows"])
     lv["rows"] = [r.ljust(w) for r in lv["rows"]]
-    for p in lv["boulders"] + lv["traps"] + lv["places"] + [lv["start"]] + ([lv["exit"]] if lv["exit"] else []):
+    for p in lv["boulders"] + lv["traps"] + lv["places"] + lv["scrolls"] + [lv["start"]] + ([lv["exit"]] if lv["exit"] else []):
         assert cell(lv, p) == ".", (lv["id"], p, cell(lv, p))
     for p in lv["doors"]:
         assert cell(lv, p) == "+", (lv["id"], p, cell(lv, p))
@@ -71,7 +74,8 @@ for lv in levels:
                 assert (x, y) in lv["doors"], (lv["id"], (x, y))
     assert len(lv["boulders"]) >= len(lv["traps"]), lv["id"]
     assert len(set(lv["boulders"])) == len(lv["boulders"])
-    print(f'{lv["id"]}: {w}x{len(lv["rows"])} boulders={len(lv["boulders"])} traps={len(lv["traps"])} ({lv["trapKind"]}) start={lv["start"]} exit={lv["exit"]} places={lv["places"]}', file=sys.stderr)
+    assert not set(lv["scrolls"]) & set(lv["boulders"]), lv["id"]
+    print(f'{lv["id"]}: {w}x{len(lv["rows"])} boulders={len(lv["boulders"])} traps={len(lv["traps"])} ({lv["trapKind"]}) start={lv["start"]} exit={lv["exit"]} places={lv["places"]} scrolls={lv["scrolls"]}', file=sys.stderr)
 
 # NetHack numbers the levels from the top: soko1 is the prize level and
 # soko4 is where you enter. The app presents them in play order.
@@ -109,7 +113,9 @@ for lv in levels:
     out.append(f'            boulders: {pts(lv["boulders"])},')
     out.append(f'            traps: {pts(lv["traps"])},')
     out.append(f'            doors: {pts(lv["doors"])},')
-    out.append(f'            prizeSpots: {pts(lv["places"])}')
+    out.append(f'            prizeSpots: {pts(lv["places"])}' + ("," if lv["scrolls"] else ""))
+    if lv["scrolls"]:
+        out.append(f'            scrolls: {pts(lv["scrolls"])}')
     out.append("        ),")
 out.append("    ]")
 out.append("}")
